@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Quiz mięśnie przedramienia - Nauka i Sprawdzian</title>
+<style>
+  body{font-family:Arial,Helvetica,sans-serif;background:#f5f7fb;margin:0;padding:18px;color:#0b1220}
+  .wrap{max-width:1000px;margin:18px auto;background:#fff;padding:18px;border-radius:10px;box-shadow:0 8px 30px rgba(10,20,40,.06)}
+  h1{text-align:center;margin:0 0 12px}
+  .tabs{display:flex;gap:8px;justify-content:center;margin-bottom:12px}
+  .tab{padding:8px 12px;border-radius:8px;border:1px solid #e2e8f0;background:#eef2f7;cursor:pointer}
+  .tab.active{background:#0ea5e9;color:#fff;border-color:#0ea5e9}
+  .panel{padding:12px;border-radius:8px}
+  .question{font-weight:700;margin:10px 0}
+  img.illustration{max-width:100%;border-radius:6px;border:1px solid #e6eef8;margin-top:8px}
+  .answers{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+  button.opt{padding:10px;border-radius:8px;border:1px solid #d1d5db;background:#fff;cursor:pointer;text-align:left}
+  button.opt.correct{background:#0b8a3e;color:#fff;border-color:#0b8a3e}
+  button.opt.wrong{background:#c53030;color:#fff;border-color:#c53030}
+  input[type="text"]{width:100%;padding:10px;border:1px solid #d1d5db;border-radius:6px;font-size:15px;margin-top:10px}
+  .controls{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+  button.primary{background:#0ea5e9;color:#fff;border:none;padding:10px 12px;border-radius:8px;cursor:pointer}
+  button.ghost{background:#eef2f7;border:1px solid #e2e8f0;padding:10px 12px;border-radius:8px;cursor:pointer}
+  .meta{font-size:13px;color:#475569;margin-top:8px}
+  .score{font-weight:700;margin-top:8px}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Mięśnie przedramienia — Nauka i Sprawdzian</h1>
+
+    <div class="tabs" role="tablist">
+      <div id="tabLearn" class="tab active" role="tab">Quiz Nauka (Wybór)</div>
+      <div id="tabTest" class="tab" role="tab">Quiz Sprawdzian (Wpisz)</div>
+    </div>
+
+    <div id="panel" class="panel"></div>
+    <p class="meta">Uwaga: obrazy powinny znajdować się w folderze <strong>images/</strong> obok tego pliku HTML.</p>
+  </div>
+
+<script>
+/* ---------- Lista mięśni i plików obrazów ---------- */
+/* Upewnij się, że pliki w folderze images mają dokładnie takie nazwy (z polskimi znakami) lub zmień je tutaj */
+const MUSCLES = [
+  {name:"dłoniowy długi", file:"dłoniowy długi.png"},
+  {name:"nawrotny czworoboczny", file:"nawrotny czworoboczny.png"},
+  {name:"nawrotny obły", file:"nawrotny obły.png"},
+  {name:"odwodziciel długi", file:"odwodziciel długi.png"},
+  {name:"odwracacz", file:"odwracacz.png"},
+  {name:"prostownik długi kciuka", file:"prostownik długi kciuka.png"},
+  {name:"prostownik krótki kciuka", file:"prostownik krótki kciuka.png"},
+  {name:"prostownik łokciowy nadgarstka", file:"prostownik łokciowy nadgarstka.png"},
+  {name:"prostownik palca małego", file:"prostownik palca małego.png"},
+  {name:"prostownik palców", file:"prostownik palców.png"},
+  {name:"prostownik promieniowy długi nadgarstka", file:"prostownik promieniowy długi nadgarstka.png"},
+  {name:"prostownik promieniowy krótki nadgarstka", file:"prostownik promieniowy krótki nadgarstka.png"},
+  {name:"prostownik wskaziciela", file:"prostownik wskaziciela.png"},
+  {name:"ramienno promieniowy", file:"ramienno promieniowy.png"},
+  {name:"zginacz długi kciuka", file:"zginacz długi kciuka.png"},
+  {name:"zginacz głęboki palców", file:"zginacz głęboki palców.png"},
+  {name:"zginacz łokciowy nadgarstka", file:"zginacz łokciowy nadgarstka.png"},
+  {name:"zginacz powierzchowny palców", file:"zginacz powierzchowny palców.png"},
+  {name:"zginacz promieniowy nadgarstka", file:"zginacz promieniowy nadgarstka.png"}
+];
+
+/* ---------- Utility: normalizacja i Levenshtein ---------- */
+function normalize(s){
+  if(!s) return "";
+  const from = "ąćęłńóśżźĄĆĘŁŃÓŚŻŹ";
+  const to   = "acelnoszzACELNOSZZ";
+  let t = String(s).trim().toLowerCase();
+  for(let i=0;i<from.length;i++) t = t.replace(new RegExp(from[i],"g"), to[i]);
+  t = t.replace(/[^a-z0-9\s\-]/g," ");
+  t = t.replace(/\s+/g," ").trim();
+  return t;
+}
+function levenshtein(a,b){
+  if(!a.length) return b.length;
+  if(!b.length) return a.length;
+  const m = Array.from({length:b.length+1},(_,i)=>Array(a.length+1).fill(0));
+  for(let i=0;i<=b.length;i++) m[i][0]=i;
+  for(let j=0;j<=a.length;j++) m[0][j]=j;
+  for(let i=1;i<=b.length;i++){
+    for(let j=1;j<=a.length;j++){
+      const cost = a[j-1]===b[i-1]?0:1;
+      m[i][j] = Math.min(m[i-1][j]+1, m[i][j-1]+1, m[i-1][j-1]+cost);
+    }
+  }
+  return m[b.length][a.length];
+}
+function similarity(a,b){
+  a = normalize(a); b = normalize(b);
+  if(!a && !b) return 1;
+  const dist = levenshtein(a,b);
+  const maxLen = Math.max(a.length,b.length);
+  return maxLen===0?1:(1 - dist/maxLen);
+}
+
+/* ---------- UI i logika ---------- */
+const panel = document.getElementById("panel");
+const tabLearn = document.getElementById("tabLearn");
+const tabTest = document.getElementById("tabTest");
+
+let mode = "learn"; // learn | test
+tabLearn.addEventListener("click", ()=>{ mode="learn"; tabLearn.classList.add("active"); tabTest.classList.remove("active"); renderLearn(); });
+tabTest.addEventListener("click", ()=>{ mode="test"; tabTest.classList.add("active"); tabLearn.classList.remove("active"); renderTest(); });
+
+/* ---------- Quiz Nauka (MCQ) ---------- */
+let learnIndex = 0;
+let learnScore = 0;
+
+function shuffle(arr){ for(let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]];} return arr; }
+
+function renderLearn(){
+  const item = MUSCLES[learnIndex % MUSCLES.length];
+  // prepare options: correct + 3 random others
+  const others = MUSCLES.filter(m=>m.name!==item.name);
+  shuffle(others);
+  const options = [item.name, others[0].name, others[1].name, others[2].name];
+  shuffle(options);
+  panel.innerHTML = `
+    <div class="question">Nauka — wybierz nazwę mięśnia widocznego na rysunku</div>
+    <img class="illustration" src="images/${item.file}" alt="mięsień">
+    <div class="answers" id="answers"></div>
+    <div class="controls">
+      <button id="nextLearn" class="ghost">Następne</button>
+      <div class="score">Wynik: ${learnScore} / ${learnIndex}</div>
+    </div>
+    <div id="learnFeedback" class="meta"></div>
+  `;
+  const answersDiv = document.getElementById("answers");
+  options.forEach(opt=>{
+    const btn = document.createElement("button");
+    btn.className = "opt";
+    btn.textContent = opt;
+    btn.onclick = ()=> {
+      const correct = opt === item.name;
+      const fb = document.getElementById("learnFeedback");
+      const buttons = answersDiv.querySelectorAll("button");
+      buttons.forEach(b=>b.disabled=true);
+      if(correct){ btn.classList.add("correct"); learnScore++; fb.textContent = "Poprawnie."; fb.className="meta correct"; }
+      else {
+        btn.classList.add("wrong");
+        // highlight correct
+        buttons.forEach(b=>{ if(b.textContent===item.name) b.classList.add("correct"); });
+        fb.textContent = `Błędnie. Poprawna odpowiedź: ${item.name}`; fb.className="meta wrong";
+      }
+      learnIndex++;
+      document.getElementById("nextLearn").focus();
+    };
+    answersDiv.appendChild(btn);
+  });
+  document.getElementById("nextLearn").onclick = ()=> renderLearn();
+}
+
+/* ---------- Quiz Sprawdzian (wpisywanie odpowiedzi) ---------- */
+let testIndex = 0;
+let testScore = 0;
+
+function renderTest(){
+  const item = MUSCLES[testIndex % MUSCLES.length];
+  panel.innerHTML = `
+    <div class="question">Sprawdzian — wpisz nazwę mięśnia widocznego na rysunku</div>
+    <img class="illustration" src="images/${item.file}" alt="mięsień">
+    <input id="testAnswer" type="text" placeholder="Wpisz nazwę mięśnia (np. nawrotny obły)">
+    <div class="controls">
+      <button id="checkTest" class="primary">Sprawdź</button>
+      <button id="nextTest" class="ghost">Następne</button>
+      <div class="score">Wynik: ${testScore} / ${testIndex}</div>
+    </div>
+    <div id="testFeedback" class="meta"></div>
+  `;
+  document.getElementById("checkTest").onclick = ()=>{
+    const user = document.getElementById("testAnswer").value.trim();
+    const fb = document.getElementById("testFeedback");
+    if(!user){ fb.textContent = "Wpisz odpowiedź."; fb.className="meta wrong"; return; }
+    const sim = similarity(user, item.name);
+    if(sim >= 0.75){
+      testScore++; fb.innerHTML = `✅ Poprawnie. (${(sim*100).toFixed(0)}% podobieństwa)`; fb.className="meta correct";
+    } else if(sim >= 0.45){
+      testScore += 0.5; fb.innerHTML = `⚠️ Częściowo poprawnie (0.5 pkt). Najbliższa forma: <strong>${item.name}</strong> (${(sim*100).toFixed(0)}% podobieństwa)`; fb.className="meta partial";
+    } else {
+      fb.innerHTML = `❌ Błędnie. Poprawna nazwa: <strong>${item.name}</strong>`; fb.className="meta wrong";
+    }
+    testIndex++;
+    document.getElementById("nextTest").focus();
+    // update score display
+    panel.querySelector(".score").textContent = `Wynik: ${testScore} / ${testIndex}`;
+  };
+  document.getElementById("nextTest").onclick = ()=> {
+    renderTest();
+  };
+}
+
+/* ---------- Init: start with Learn ---------- */
+renderLearn();
+</script>
+</body>
+</html>
